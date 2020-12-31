@@ -1,0 +1,23 @@
+### Django ###
+*.log
+*.pot
+*.pyc
+*.pyx
+__pycache__/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+# media
+
+**/node_modules
+__pypackages__/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Pipfile.lock
+# Pipfile
