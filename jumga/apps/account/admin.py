@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.utils.translation import ugettext_lazy as _
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
-from .models import Merchant, Customer, Rider
+from .models import Merchant, Customer, Rider, Country
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 # from django.conf import settings
@@ -18,6 +18,8 @@ class UserAdmin(BaseUserAdmin):
         # (_('Personal info'), {'fields': ('first_name', 'last_name')}),
         (_('Permissions'), {'fields': ('is_active', 'is_staff', 'is_superuser',
                                        'groups', 'user_permissions')}),
+        (_('Bank Details'), {'fields': ('bank_name',
+                                        'bank_account_name', 'bank_account_number',)}),
         (_('Important dates'), {'fields': ('date_joined',)}),
     )
     add_fieldsets = (
@@ -26,7 +28,7 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('email', 'password1', 'password2'),
         }),
     )
-    list_display = ('id', 'email', 'username',
+    list_display = ('id', 'email', 'account_balance', 'username',
                     'is_active', 'is_staff', 'last_login')
     search_fields = ('email',)
     ordering = ('email',)
@@ -41,7 +43,8 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(Merchant)
 class MerchantAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'first_name', 'last_name', 'phone_number',)
+    list_display = ('id', 'user', 'first_name',
+                    'last_name', 'phone_number', 'country')
 
 
 @admin.register(Customer)
@@ -52,3 +55,8 @@ class CustomerAdmin(admin.ModelAdmin):
 @admin.register(Rider)
 class RiderAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'first_name', 'last_name', 'phone_number',)
+
+
+@admin.register(Country)
+class CountryAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'short_name', 'currency',)

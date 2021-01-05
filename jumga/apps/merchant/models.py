@@ -1,15 +1,20 @@
-from django.db import models
-from django.contrib.auth import get_user_model
-import uuid
-from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
-from django.utils import timezone
-from django.utils.text import slugify
-from django.core.validators import MinValueValidator, MaxValueValidator
-from jumga.apps.account.models import Merchant, Customer, Rider
+from decimal import Decimal as D
 from jumga.extras import CharNullField
+from jumga.apps.account.models import Merchant, Customer, Rider
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils.text import slugify
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
+import uuid
+from django.contrib.auth import get_user_model
+from django.db import models
 
 User = get_user_model()
+
+
+def approximate(val):
+    return D(val).quantize(D('0.01'))
 
 
 class Shop(models.Model):
@@ -22,7 +27,9 @@ class Shop(models.Model):
 
     name = models.CharField(max_length=500)
     description = models.CharField(max_length=256, blank=True)
-    sub_domain = models.CharField(max_length=128, unique=True)
+    sub_domain = models.SlugField(default='', editable=False, max_length=200)
+
+    delivery_fee = models.IntegerField()
 
     logo = models.ImageField(
         upload_to='shoplogo/', blank=True, null=True)
@@ -55,6 +62,11 @@ class Shop(models.Model):
         else:
             # return null
             return ""
+
+    def save(self, *args, **kwargs):
+        self.sub_domain = (slugify(self.name[:40], allow_unicode=True).strip(
+            '-')+'-'+str(uuid.uuid4())[:5]).strip('-')
+        super().save(*args, **kwargs)
 
 
 class ShopCategory(models.Model):
@@ -108,12 +120,24 @@ class Product(models.Model):
 
 
 class Order(models.Model):
+    # PERCENTAGE SHARING RATIO
+    MERCHANT_PERCENTAGE = 97.4
+    JUMGA_PERCENTAGE = 2.6
 
+    DRIVER_PERCENTAGE = 80
+    JUMGA_DELIVERY_PERCENTAGE = 20
+
+    # FEE FOR DELIVERY
+    # DELIVERY_FEE = approximate(20.00)
+
+    # ORDER STATUS
+    STANDING = 0
     CANCELLED = 1
     PAYMENT_MADE = 2
     DELIVERED = 3
 
     CURRENT_STATUS = (
+        (STANDING, 'standing'),
         (CANCELLED, 'cancelled'),
         (PAYMENT_MADE, 'paid'),
         (DELIVERED, 'delivered')
@@ -121,14 +145,19 @@ class Order(models.Model):
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-    rider = models.ForeignKey(Rider, on_delete=models.CASCADE)
+    # rider = models.ForeignKey(Rider, on_delete=models.CASCADE)
+
+    address = models.CharField(max_length=250, null=True)
+    city = models.CharField(max_length=100, null=True)
+
+    reference_id = models.CharField(max_length=128, blank=True)
 
     order_items = models.ManyToManyField(
         Product, through='OrderedItem', related_name='orders')
 
-    status = models.IntegerField(choices=CURRENT_STATUS, blank=True)
+    status = models.IntegerField(choices=CURRENT_STATUS, default=STANDING)
 
-    price = models.DecimalField(max_digits=12, decimal_places=2)
+    paid = models.BooleanField(default=False)
 
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -136,11 +165,28 @@ class Order(models.Model):
     class Meta:
         db_table = 'order'
 
+    def __str__(self):
+        return 'Order {}'.format(self.id)
+
+    def get_short_name_and_currency(self):
+        return {
+            "short_name": self.shop.user.country.short_name,
+            "currency": self.shop.user.country.currency
+        }
+
+    def get_total_cost(self):
+        # return sum(item.get_cost() for item in self.items.all())
+        subtotal = sum(item.get_cost() for item in self.items.all())
+        delivery = self.shop.delivery_fee
+        return subtotal + delivery
+
 
 class OrderedItem(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    order = models.ForeignKey(Order, on_delete=models.CASCADE)
-    quantity = models.IntegerField()
+    product = models.ForeignKey(
+        Product, related_name='order_items', on_delete=models.CASCADE)
+    order = models.ForeignKey(
+        Order, related_name='items', on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=1)
     item_price = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
@@ -151,16 +197,41 @@ class OrderedItem(models.Model):
         return self.product.name
 
     @property
-    def price(self):
+    def get_cost(self):
         return self.quantity * self.item_price
 
 
-# class Earning(models.Model):
+# class Payment(models.Model):
 
-#     product = models.ForeignKey(Product, on_delete=models.CASCADE)
+#     NGN = 'NGN'
+#     GHS = 'GHS'
+#     KES = 'KES'
+#     GBP = 'GBP'
 
-#     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+#     SHOP_APPROVAL_TOKEN = 'shop_approval'
+#     SALE = 'sale'
+
+#     CURRENCY = (
+#         (NGN, 'NGN'),
+#         (GHS, 'GHS'),
+#         (KES, 'KES'),
+#         (GBP, 'GBP')
+#     )
+
+#     PAYMENT_TYPE = (
+#         (SHOP_APPROVAL_TOKEN, 'SHOP_APPROVAL_TOKEN'),
+#         (SALE, 'SALE')
+#     )
+
+#     order = models.ForeignKey(Order, on_delete=models.CASCADE)
+#     reference = models.CharField(max_length=128)
+#     amount = models.DecimalField(max_digits=12, decimal_places=2)
+#     currency = models.CharField(max_length=5, choices=CURRENCY)
+#     payment_type = models.CharField(max_length=64, choices=PAYMENT_TYPE)
+#     payment_options = models.CharField(max_length=64)
+
 #     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+#     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
 #     rider = models.ForeignKey(Rider, on_delete=models.CASCADE)
 #     jumga = models.ForeignKey(User, on_delete=models.CASCADE)
 
@@ -168,10 +239,10 @@ class OrderedItem(models.Model):
 #     created_at = models.DateTimeField(auto_now_add=True)
 
 #     class Meta:
-#         db_table = 'earning'
+#         db_table = 'payment'
 
 #     def __str__(self):
-#         return self.product
+#         return self.order
 
 
 # class OrderPayment(models.Model):
@@ -186,3 +257,9 @@ class OrderedItem(models.Model):
 
 #     class Meta:
 #         db_table = 'orderpayment'
+
+
+# merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
+# customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+# rider = models.ForeignKey(Rider, on_delete=models.CASCADE)
+# jumga = models.ForeignKey(User, on_delete=models.CASCADE)

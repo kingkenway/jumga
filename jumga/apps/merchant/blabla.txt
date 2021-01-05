@@ -1,0 +1,51 @@
+GHANA
+
+{
+   "tx_ref":"MC-158523s09v5050e8",
+   "amount":"150",
+   "currency":"GHS",
+   "voucher":"143256743",
+   "network":"MTN",
+   "email":"user@gmail.com",
+   "phone_number":"054709922220",
+   "fullname":"John Madakin"
+}
+
+
+NG
+
+{
+   "tx_ref":"MC-1585230ew9v5050e8",
+   "amount":"100",
+   "account_bank":"044",
+   "account_number":"0690000037",
+   "currency":"NGN",
+   "email":"user@gmail.com",
+   "phone_number":"0902620185",
+   "fullname":"Yemi Desola"
+}
+
+
+KES
+
+{
+  "tx_ref": "MC-15852113s09v5050e8",
+  "amount": "1500",
+  "currency": "KES",
+  "email": "ekene@gmail.com",
+  "phone_number": "054709929220",
+  "fullname": "Ekene Eze"
+}
+
+UK
+
+{
+  "tx_ref": "MC-1585230ew9v5050e8",
+  "amount": "100",
+  "account_bank": "044",
+  "account_number": "0690000037",
+  "currency": "GBP",
+  "email": "user@gmail.com",
+  "phone_number": "0902620185",
+  "fullname": "Yemi Desola",
+}

@@ -11,7 +11,7 @@ User = get_user_model()
 
 @admin.register(Shop)
 class ShopAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'rider', 'name', 'description', 'sub_domain',
+    list_display = ('id', 'user', 'rider', 'name', 'description', 'sub_domain', 'delivery_fee',
                     'logo', 'banner_image', 'is_active', 'updated_at', 'created_at', )
 
 
@@ -26,10 +26,17 @@ class ProductAdmin(admin.ModelAdmin):
                     'shopcategory', 'is_active', 'updated_at', 'created_at', )
 
 
+class OrderedItemInline(admin.TabularInline):
+    model = OrderedItem
+    # extra = 2
+
+
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'shop', 'customer', 'rider',
-                    'status', 'price', 'updated_at', 'created_at', )
+    list_display = ('id', 'shop', 'customer', 'address', 'city', 'reference_id', 'paid',
+                    'status', 'updated_at', 'created_at', )
+
+    inlines = (OrderedItemInline,)
 
 
 @admin.register(OrderedItem)

@@ -7,7 +7,9 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
-from .models import Merchant, Customer
+from rest_framework.exceptions import NotAuthenticated
+
+from .models import Merchant, Customer, Country
 
 User = get_user_model()
 
@@ -19,20 +21,36 @@ User = get_user_model()
 class UserTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        refresh = self.get_token(self.user)
-        self.user.last_login = timezone.now()
-        self.user.save()
-        data['refresh'] = str(refresh)
-        data['access'] = str(refresh.access_token)
-        print(data)
-        return data
+
+        if hasattr(self.user, 'merchant'):
+            refresh = self.get_token(self.user)
+            self.user.last_login = timezone.now()
+            self.user.save()
+            data['refresh'] = str(refresh)
+            data['access'] = str(refresh.access_token)
+
+            user = {}
+            user['id'] = self.user.id
+            user['email'] = self.user.email
+            user['merchant_id'] = self.user.merchant.id
+            user['first_name'] = self.user.merchant.first_name
+            user['last_name'] = self.user.merchant.last_name
+            user['country'] = self.user.merchant.get_country_data
+            user['phone_number'] = self.user.merchant.phone_number
+            data['profile'] = user
+
+            return data
+
+        else:
+            raise NotAuthenticated(
+                {'detail': 'No active account found with the given credentials'})
 
 
 class MerchantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Merchant
-        fields = ['id', 'first_name', 'last_name', 'phone_number']
+        fields = ['id', 'first_name', 'last_name', 'phone_number', 'country']
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -67,6 +85,7 @@ class MerchantSignupSerializer(serializers.ModelSerializer):
             user=user,
             first_name=merchant_data['first_name'],
             last_name=merchant_data['last_name'],
+            country=merchant_data['country'],
             phone_number=merchant_data['phone_number'],
         )
 
@@ -128,6 +147,13 @@ class UserChangePasswordSerializer(serializers.Serializer):
     def validate_new_password(self, value):
         validate_password(value)
         return value
+
+
+class CountrySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Country
+        fields = ['id', 'name', 'short_name', 'currency']
 
 
 # class UserProfileSerializer(serializers.ModelSerializer):

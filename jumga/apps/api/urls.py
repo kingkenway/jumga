@@ -52,7 +52,7 @@ urlpatterns = [
          merchant_views.ShopDetailView.as_view(), name='merchant_shop_detail'),
 
     # *************
-    path(f'{VER_}/{merchant}/shop/<int:merchant_id>/all/',
+    path(f'{VER_}/{merchant}/shop/<uuid:id>/all/',
          merchant_views.ShopListView.as_view(), name='merchant_all_shops'),
 
 
@@ -78,6 +78,8 @@ urlpatterns = [
     path(f'{VER_}/{merchant}/shop/product/<int:shop_id>/all/',
          merchant_views.ProductListView.as_view(), name='merchant_all_shop_products'),
 
-
+    # OTHERS
+    path(f'{VER_}/countries/',
+         views.CountryView.as_view(), name='countries'),
 
 ]

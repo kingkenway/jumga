@@ -65,6 +65,18 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
+class Country(models.Model):
+    name = models.CharField(max_length=64)
+    short_name = models.CharField(max_length=5)
+    currency = models.CharField(max_length=5)
+
+    class Meta:
+        db_table = 'country'
+
+    def __str__(self):
+        return self.name
+
+
 class User(AbstractBaseUser, PermissionsMixin):
     """
     An abstract base class implementing a fully featured User model with
@@ -77,6 +89,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=150, unique=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
+
+    bank_name = models.CharField(max_length=150, blank=True)
+    bank_account_name = models.CharField(max_length=150, blank=True)
+    bank_account_number = models.CharField(max_length=150, blank=True)
+
+    account_balance = models.DecimalField(
+        max_digits=20, decimal_places=2, default=0.00)
 
     date_joined = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(blank=True, null=True)
@@ -106,6 +125,9 @@ class Merchant(models.Model):
     phone_number = CharNullField(
         max_length=18, unique=True, blank=True, null=True, default=None)
 
+    country = models.ForeignKey(
+        Country, on_delete=models.CASCADE, blank=True, null=True)
+
     class Meta:
         db_table = 'merchant'
 
@@ -115,6 +137,14 @@ class Merchant(models.Model):
     @property
     def full_name(self):
         return self.first_name + " " + self.last_name
+
+    @property
+    def get_country_data(self):
+        return {
+            "name": self.country.name,
+            "short_name": self.country.short_name,
+            "currency": self.country.currency
+        }
 
 
 class Customer(models.Model):

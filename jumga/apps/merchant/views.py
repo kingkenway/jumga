@@ -27,9 +27,9 @@ class ShopListView(APIView):
     # authentication_classes = [TokenAuthentication]
     # permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request, merchant_id):
+    def get(self, request, id):
         shop = Shop.objects.filter(
-            user=merchant_id).order_by('-id')
+            user__user__id=id).order_by('-id')
 
         if shop:
             serializer = ShopSerializer(shop, many=True)

@@ -11,7 +11,6 @@ from django.http import Http404
 from django.conf import settings
 from django.core.mail import send_mail
 # from .serializers import UserTokenObtainPairSerializer, UserSerializer, UserProfileSerializer, UserChangePasswordSerializer, RestaurantProfileSerializer, DriverProfileSerializer
-from .serializers import UserTokenObtainPairSerializer, MerchantSignupSerializer, CustomerSignupSerializer, MerchantSerializer, CustomerSerializer, UserChangePasswordSerializer
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import update_last_login
 from django.utils import timezone
@@ -19,7 +18,9 @@ from django.utils import timezone
 from jumga.permissions import IsOwnerOrReadOnly
 from jumga.access import encoded_reset_token, decode_reset_token
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-from .models import Merchant, Customer
+
+from .serializers import UserTokenObtainPairSerializer, MerchantSignupSerializer, CustomerSignupSerializer, MerchantSerializer, CustomerSerializer, UserChangePasswordSerializer, CountrySerializer
+from .models import Merchant, Customer, Country
 
 
 User = get_user_model()
@@ -27,6 +28,20 @@ User = get_user_model()
 
 class TokenObtainPairView(TokenObtainPairView):
     serializer_class = UserTokenObtainPairSerializer
+
+
+# Ordinarily, the commented view above is to be used,
+# but due to an admin been given a 201 status even though
+# its cred. are invalid. THis below is just an hack tho.
+# Not really necessary
+# class TokenObtainPairView(TokenObtainPairView):
+
+#     def post(self, request):
+#         serializer = UserTokenObtainPairSerializer(data=request.data)
+
+#         if serializer.is_valid(self):
+#             error = {'detail': 'No active account found with the given credentials'}
+#             return response.Response(error, status.HTTP_401_UNAUTHORIZED)
 
 
 class MerchantSignupView(APIView):
@@ -43,8 +58,10 @@ class MerchantSignupView(APIView):
             user_data = {}
             user_data['id'] = user.id
             user_data['email'] = user.email
+            user_data['merchant_id'] = user.merchant.id
             user_data['first_name'] = user.merchant.first_name
             user_data['last_name'] = user.merchant.last_name
+            user_data['country'] = user.merchant.get_country_data
             user_data['phone_number'] = user.merchant.phone_number
 
             data = {
@@ -52,7 +69,7 @@ class MerchantSignupView(APIView):
                 "message": "user created",
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
-                "data": user_data
+                "profile": user_data
             }
 
             return response.Response(data, status.HTTP_201_CREATED)
@@ -74,6 +91,7 @@ class CustomerSignupView(APIView):
             user_data = {}
             user_data['id'] = user.id
             user_data['email'] = user.email
+            user_data['customer_id'] = user.customer.id
             user_data['first_name'] = user.customer.first_name
             user_data['last_name'] = user.customer.last_name
             user_data['phone_number'] = user.customer.phone_number
@@ -83,7 +101,7 @@ class CustomerSignupView(APIView):
                 "message": "user created",
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
-                "data": user_data
+                "profile": user_data
             }
 
             return response.Response(data, status.HTTP_201_CREATED)
@@ -214,6 +232,11 @@ class LogoutAllView(APIView):
             t, _ = BlacklistedToken.objects.get_or_create(token=token)
 
         return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class CountryView(generics.ListAPIView):
+    queryset = Country.objects.all()
+    serializer_class = CountrySerializer
 
 
 # Generate new fernet key
