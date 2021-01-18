@@ -1,0 +1,1 @@
+web: gunicorn jumga.wsgi --log-file -
