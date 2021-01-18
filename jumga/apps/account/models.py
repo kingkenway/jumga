@@ -23,6 +23,8 @@ from django.db import transaction
 from django.conf import settings
 from jumga.extras import CharNullField
 
+# from jumga.apps.merchant import models
+
 
 class ActiveManager(models.Manager):
     def get_queryset(self):

@@ -1,6 +1,6 @@
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from decimal import Decimal as D
-from jumga.extras import CharNullField
-from jumga.apps.account.models import Merchant, Customer, Rider
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.text import slugify
 from django.utils import timezone
@@ -9,6 +9,10 @@ from django.core.exceptions import ValidationError
 import uuid
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db import transaction, IntegrityError
+
+from jumga.extras import CharNullField
+from jumga.apps.account.models import Merchant, Customer, Rider
 
 User = get_user_model()
 
@@ -56,6 +60,10 @@ class Shop(models.Model):
             return ""
 
     @property
+    def country_data(self):
+        return self.user.get_country_data
+
+    @property
     def get_banner_image(self):
         if self.banner_image and hasattr(self.banner_image, 'url'):
             return self.banner_image.url
@@ -63,10 +71,11 @@ class Shop(models.Model):
             # return null
             return ""
 
-    def save(self, *args, **kwargs):
-        self.sub_domain = (slugify(self.name[:40], allow_unicode=True).strip(
-            '-')+'-'+str(uuid.uuid4())[:5]).strip('-')
-        super().save(*args, **kwargs)
+    @property
+    def rider_full_name(self):
+        if self.rider:
+            return self.rider.first_name + " " + self.rider.last_name
+        return ""
 
 
 class ShopCategory(models.Model):
@@ -98,7 +107,7 @@ class Product(models.Model):
         upload_to='shop/', blank=True, null=True)
 
     shop = models.ForeignKey(
-        Shop, on_delete=models.CASCADE)
+        Shop, on_delete=models.CASCADE, related_name="products")
 
     shopcategory = models.ForeignKey(
         ShopCategory, on_delete=models.CASCADE, blank=True, null=True)
@@ -121,11 +130,11 @@ class Product(models.Model):
 
 class Order(models.Model):
     # PERCENTAGE SHARING RATIO
-    MERCHANT_PERCENTAGE = 97.4
-    JUMGA_PERCENTAGE = 2.6
+    MERCHANT_PERCENTAGE = 0.974
+    JUMGA_PERCENTAGE = 0.026
 
-    DRIVER_PERCENTAGE = 80
-    JUMGA_DELIVERY_PERCENTAGE = 20
+    DRIVER_PERCENTAGE = 0.8
+    JUMGA_DELIVERY_PERCENTAGE = 0.2
 
     # FEE FOR DELIVERY
     # DELIVERY_FEE = approximate(20.00)
@@ -144,13 +153,18 @@ class Order(models.Model):
     )
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE)
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    customer_name = models.CharField(max_length=250, default='')
+    customer_email = models.CharField(max_length=250, default='')
+    customer_contact = models.CharField(max_length=250, default='')
     # rider = models.ForeignKey(Rider, on_delete=models.CASCADE)
 
-    address = models.CharField(max_length=250, null=True)
-    city = models.CharField(max_length=100, null=True)
+    customer_address = models.CharField(max_length=250, default='')
+    customer_city = models.CharField(max_length=100, default='')
 
-    reference_id = models.CharField(max_length=128, blank=True)
+    customer_instruction = models.CharField(
+        max_length=100, default='', blank=True)
+
+    reference_id = models.CharField(max_length=128, editable=False)
 
     order_items = models.ManyToManyField(
         Product, through='OrderedItem', related_name='orders')
@@ -174,11 +188,11 @@ class Order(models.Model):
             "currency": self.shop.user.country.currency
         }
 
+    @property
     def get_total_cost(self):
-        # return sum(item.get_cost() for item in self.items.all())
-        subtotal = sum(item.get_cost() for item in self.items.all())
-        delivery = self.shop.delivery_fee
-        return subtotal + delivery
+        subtotal = sum([item.get_cost for item in self.items.all()])
+        total = self.shop.delivery_fee + subtotal
+        return total
 
 
 class OrderedItem(models.Model):
@@ -201,62 +215,223 @@ class OrderedItem(models.Model):
         return self.quantity * self.item_price
 
 
-# class Payment(models.Model):
+class Payment(models.Model):
 
-#     NGN = 'NGN'
-#     GHS = 'GHS'
-#     KES = 'KES'
-#     GBP = 'GBP'
+    NGN = 'NGN'
+    GHS = 'GHS'
+    KES = 'KES'
+    GBP = 'GBP'
+    USD = 'USD'
 
-#     SHOP_APPROVAL_TOKEN = 'shop_approval'
-#     SALE = 'sale'
+    APPROVAL = 'approval'
+    SALE = 'sale'
 
-#     CURRENCY = (
-#         (NGN, 'NGN'),
-#         (GHS, 'GHS'),
-#         (KES, 'KES'),
-#         (GBP, 'GBP')
-#     )
+    CURRENCY = (
+        (NGN, 'NGN'),
+        (GHS, 'GHS'),
+        (KES, 'KES'),
+        (GBP, 'GBP'),
+        (USD, 'USD'),  # For Approval
+    )
 
-#     PAYMENT_TYPE = (
-#         (SHOP_APPROVAL_TOKEN, 'SHOP_APPROVAL_TOKEN'),
-#         (SALE, 'SALE')
-#     )
+    PAYMENT_TYPE = (
+        (APPROVAL, 'APPROVAL'),
+        (SALE, 'SALE')
+    )
 
-#     order = models.ForeignKey(Order, on_delete=models.CASCADE)
-#     reference = models.CharField(max_length=128)
-#     amount = models.DecimalField(max_digits=12, decimal_places=2)
-#     currency = models.CharField(max_length=5, choices=CURRENCY)
-#     payment_type = models.CharField(max_length=64, choices=PAYMENT_TYPE)
-#     payment_options = models.CharField(max_length=64)
+    amount = models.DecimalField(max_digits=18, decimal_places=2)
+    currency = models.CharField(max_length=5, choices=CURRENCY)
 
-#     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
-#     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)
-#     rider = models.ForeignKey(Rider, on_delete=models.CASCADE)
-#     jumga = models.ForeignKey(User, on_delete=models.CASCADE)
+    merchant = models.ForeignKey(
+        Merchant, on_delete=models.CASCADE, blank=True, null=True)
 
-#     updated_at = models.DateTimeField(auto_now=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
+    # If shop approval==True
+    shop = models.ForeignKey(
+        Shop, on_delete=models.CASCADE, blank=True, null=True)
 
-#     class Meta:
-#         db_table = 'payment'
+    status = models.CharField(max_length=128)
 
-#     def __str__(self):
-#         return self.order
+    flw_ref = models.CharField(max_length=128)
+    transaction_id = models.CharField(max_length=128)
+    tx_ref = models.CharField(max_length=128)
+
+    payment_type = models.CharField(max_length=64, choices=PAYMENT_TYPE)
+
+    order = models.ForeignKey(
+        Order, on_delete=models.CASCADE, null=True, blank=True)
+
+    narration = models.CharField(max_length=256, default="")
+
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'payment'
+
+    def __str__(self):
+        return self.tx_ref
 
 
-# class OrderPayment(models.Model):
-#     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-#     amount = models.BigIntegerField()
-#     order = models.ForeignKey(Order, on_delete=models.CASCADE)
-#     customer = models.ForeignKey(User, on_delete=models.CASCADE)
-#     is_disbursed = models.BooleanField(default=False)
+class Transaction(models.Model):
+    DEBIT = 'debit'
+    CREDIT = 'credit'
 
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     # payment_method = models.CharField(max_length=256)
+    NGN = 'NGN'
+    GHS = 'GHS'
+    KES = 'KES'
+    GBP = 'GBP'
+    USD = 'USD'
 
-#     class Meta:
-#         db_table = 'orderpayment'
+    TRANSACTION_TYPE = (
+        (DEBIT, 'Debit'),
+        (CREDIT, 'Credit'),
+    )
+
+    CURRENCY = (
+        (NGN, 'NGN'),
+        (GHS, 'GHS'),
+        (KES, 'KES'),
+        (GBP, 'GBP'),
+        (USD, 'USD'),
+    )
+
+    amount = models.DecimalField(max_digits=18, decimal_places=2)
+    currency = models.CharField(max_length=5, choices=CURRENCY)
+    beneficiary = models.ForeignKey(User, on_delete=models.CASCADE, )
+    transaction_type = models.CharField(
+        max_length=10, choices=TRANSACTION_TYPE)
+    transaction_id = models.CharField(
+        default='', max_length=128, editable=False)
+    tx_ref_from_payment = models.ForeignKey(
+        Payment, on_delete=models.CASCADE, blank=True, null=True)
+
+    narration = models.CharField(max_length=256, default="")
+
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'transaction'
+
+    def __str__(self):
+        return "Transaction ID: "+self.transaction_id
+
+    def save(self, *args, **kwargs):
+        self.transaction_id = str(uuid.uuid4())[:18].strip('-')
+        super().save(*args, **kwargs)
+
+
+@receiver(post_save, sender=Payment)
+def initiate_transaction(sender, instance, **kwargs):
+    jumga_id = '2e66899b-0ca9-44da-941e-89c949cde8cc'
+
+    if kwargs['created']:
+        if instance.payment_type == "approval":
+            try:
+                with transaction.atomic():
+                    # 1. Credit Jumga's account
+                    # jumga_id = '2e66899b-0ca9-44da-941e-89c949cde8cc'
+                    jumga = User.objects.get(
+                        id=jumga_id)
+                    Transaction.objects.create(
+                        beneficiary=jumga,
+                        amount=instance.amount,
+                        currency=instance.currency,
+                        tx_ref_from_payment=instance,
+                        narration="Earnings on Shop Approval",
+                        transaction_type=Transaction.CREDIT
+                    )
+
+                    # 2. Activate shop and Assign Rider
+                    # !!! Please, don't this below query in production
+                    random_rider = Rider.objects.order_by('?').first()
+                    shop_obj = Shop.objects.get(id=instance.shop.id)
+                    shop_obj.is_active = True
+                    shop_obj.rider = random_rider
+                    shop_obj.save()
+
+                    # 3 Credit Account balance of Jumga shop
+                    user_obj = User.objects.get(id=jumga_id)
+                    user_obj.account_balance += instance.amount
+                    user_obj.save()
+
+            except IntegrityError:
+                pass
+
+        elif instance.payment_type == "sale":
+            try:
+                with transaction.atomic():
+                    amount = (instance.amount - D(instance.shop.delivery_fee))
+                    # 1. Credit Jumga's account on sale
+                    Transaction.objects.create(
+                        beneficiary_id=jumga_id,
+                        amount=amount * D(Order.JUMGA_PERCENTAGE),
+                        currency=instance.currency,
+                        tx_ref_from_payment=instance,
+                        narration="Earnings on Sales",
+                        transaction_type=Transaction.CREDIT
+                    )
+                    # 2. Credit Merchant's account on sale
+                    Transaction.objects.create(
+                        beneficiary_id=instance.order.shop.user.user.id,
+                        amount=amount * D(Order.MERCHANT_PERCENTAGE),
+                        currency=instance.currency,
+                        tx_ref_from_payment=instance,
+                        narration="Earnings on Sales",
+                        transaction_type=Transaction.CREDIT
+                    )
+                    # 3. Credit Jumga's account on Delivery
+                    Transaction.objects.create(
+                        beneficiary_id=jumga_id,
+                        amount=instance.shop.delivery_fee *
+                        D(Order.JUMGA_DELIVERY_PERCENTAGE),
+                        currency=instance.currency,
+                        tx_ref_from_payment=instance,
+                        narration="Earnings on Delivery",
+                        transaction_type=Transaction.CREDIT
+                    )
+                    # 4. Credit Rider's account on Delivery
+                    Transaction.objects.create(
+                        beneficiary_id=instance.order.shop.rider.user.id,
+                        amount=instance.shop.delivery_fee *
+                        D(Order.DRIVER_PERCENTAGE),
+                        currency=instance.currency,
+                        tx_ref_from_payment=instance,
+                        narration="Earnings on Delivery",
+                        transaction_type=Transaction.CREDIT
+                    )
+                    # 5. Change Order status to paid
+                    order_obj = Order.objects.get(id=instance.order.id)
+                    order_obj.status = Order.PAYMENT_MADE
+                    order_obj.paid = True
+                    order_obj.save()
+
+            except IntegrityError:
+                pass
+
+
+@receiver(models.signals.pre_save, sender=Shop)
+def detect_if_shop_name_has_changed(sender, instance, **kwargs):
+    main_slug = (slugify(instance.name[:40], allow_unicode=True).strip(
+        '-')+'-'+str(uuid.uuid4())[:5]).strip('-')
+
+    try:
+        obj = sender.objects.get(pk=instance.pk)
+    except sender.DoesNotExist:
+        # Object is new, so field hasn't technically changed, but you may want to do something else here.
+        if not instance.sub_domain:
+            instance.sub_domain = main_slug
+    else:
+        if not obj.name == instance.name:  # Field has changed
+            instance.sub_domain = main_slug
+
+
+def set_reference_id(sender, instance, **kwargs):
+    if not instance.reference_id:
+        instance.reference_id = "ref_"+str(uuid.uuid4())[:14].strip('-')
+
+
+models.signals.pre_save.connect(set_reference_id, sender=Order)
 
 
 # merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE)

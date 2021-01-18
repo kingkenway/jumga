@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.utils.translation import ugettext_lazy as _
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth import get_user_model
-from .models import Merchant, Customer, Rider, Country
+from .models import Merchant, Rider, Country
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 # from django.conf import settings
@@ -45,11 +45,6 @@ class UserAdmin(BaseUserAdmin):
 class MerchantAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'first_name',
                     'last_name', 'phone_number', 'country')
-
-
-@admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'first_name', 'last_name', 'phone_number',)
 
 
 @admin.register(Rider)

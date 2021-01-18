@@ -9,7 +9,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from rest_framework.exceptions import NotAuthenticated
 
-from .models import Merchant, Customer, Country
+from .models import Merchant, Country
 
 User = get_user_model()
 
@@ -53,11 +53,32 @@ class MerchantSerializer(serializers.ModelSerializer):
         fields = ['id', 'first_name', 'last_name', 'phone_number', 'country']
 
 
-class CustomerSerializer(serializers.ModelSerializer):
+class MerchantProfileSerializer(serializers.ModelSerializer):
+    userprofile = MerchantSerializer(required=True)
 
     class Meta:
-        model = Customer
-        fields = ['id', 'first_name', 'last_name', 'phone_number']
+        model = User
+        fields = ('email', 'userprofile')
+
+    def update(self, instance, validated_data):
+        instance.email = validated_data['email']
+        instance.save()
+
+        # merchant_data = validated_data.pop('userprofile')
+        merchant = Merchant.objects.get(user__id=instance.id)
+
+        # merchant.first_name = merchant_data['first_name'],
+        # merchant.last_name = merchant_data['last_name'],
+        # merchant.country = merchant_data['country'],
+        # merchant.phone_number = merchant_data['phone_number'],
+
+        # merchant.save()
+
+        xx = (validated_data.pop('userprofile'))
+
+        print((xx['country']['id']))
+
+        return instance
 
 
 class MerchantSignupSerializer(serializers.ModelSerializer):
@@ -87,44 +108,6 @@ class MerchantSignupSerializer(serializers.ModelSerializer):
             last_name=merchant_data['last_name'],
             country=merchant_data['country'],
             phone_number=merchant_data['phone_number'],
-        )
-
-        return user
-
-    def validate(self, data):
-        if data['password1'] != data['password2']:
-            raise serializers.ValidationError('Passwords must match.')
-
-        validate_password(data['password1'])
-        return data
-
-
-class CustomerSignupSerializer(serializers.ModelSerializer):
-    profile = CustomerSerializer(required=True)
-
-    password1 = serializers.CharField(write_only=True)
-    password2 = serializers.CharField(write_only=True)
-    model = User
-
-    class Meta:
-        model = User
-        fields = ('password1', 'password2', 'email', 'profile')
-        extra_kwargs = {'password1': {'write_only': True},
-                        'password2': {'write_only': True}}
-
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            email=validated_data['email'],
-            password=validated_data['password1'],
-            is_active=True
-        )
-        customer_data = validated_data.pop('profile')
-        # create merrchant
-        customer = Customer.objects.create(
-            user=user,
-            first_name=customer_data['first_name'],
-            last_name=customer_data['last_name'],
-            phone_number=customer_data['phone_number'],
         )
 
         return user

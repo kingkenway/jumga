@@ -10,13 +10,13 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
 from django.core.mail import send_mail
-from .serializers import ShopSerializer, ShopCategorySerializer, ProductSerializer
+from .serializers import ShopSerializer, ShopAndProductsSerializer, ShopCategorySerializer, ProductSerializer, PaymentSerializer, OrderSerializer, CustomerOrdersSerializer, MerchantOrdersSerializer, TransactionSerializer
 from django.contrib.auth.models import update_last_login
 from django.utils import timezone
 
 from jumga.permissions import IsOwnerOrReadOnly
 from jumga.access import encoded_reset_token, decode_reset_token
-from .models import Shop, ShopCategory, Product
+from .models import Shop, ShopCategory, Product, Order, Transaction
 
 User = get_user_model()
 
@@ -157,6 +157,22 @@ class ProductListView(APIView):
             return response.Response(err, status.HTTP_200_OK)
 
 
+class ShopAndProductsView(APIView):
+
+    def get_object(self, shop_slug):
+        try:
+            return Shop.objects.get(sub_domain=shop_slug)
+
+        except Shop.DoesNotExist:
+            # return HttpResponse(status=status.HTTP_404_NOT_FOUND)
+            raise Http404
+
+    def get(self, request, shop_slug):
+        shop = self.get_object(shop_slug)
+        serializer = ShopAndProductsSerializer(shop)
+        return Response(serializer.data)
+
+
 class ProductNewView(APIView):
     # authentication_classes = [TokenAuthentication]
     # permission_classes = [permissions.IsAuthenticated]
@@ -165,7 +181,7 @@ class ProductNewView(APIView):
         serializer = ProductSerializer(data=request.data)
 
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(is_active=True)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -193,3 +209,115 @@ class ProductDetailView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Payment AND Transaction
+
+
+class PaymentView(APIView):
+    # authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = PaymentSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MerchantOrdersView(APIView):
+    # authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, id):
+        orders = Order.objects.filter(shop__user__user__id=id).order_by('-id')
+
+        if orders:
+            serializer = MerchantOrdersSerializer(orders, many=True)
+            return Response(serializer.data)
+        else:
+            # err = {"error": "not found", "status":404}
+            # return response.Response(err, status.HTTP_404_NOT_FOUND)
+            err = []
+            return response.Response(err, status.HTTP_200_OK)
+
+
+class CustomersOrderView(APIView):
+    # authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, email, contact):
+        orders = Order.objects.filter(
+            customer_email=email, customer_contact=contact).order_by('-id')
+
+        if orders:
+            serializer = CustomerOrdersSerializer(orders, many=True)
+            return Response(serializer.data)
+        else:
+            # err = {"error": "not found", "status":404}
+            # return response.Response(err, status.HTTP_404_NOT_FOUND)
+            err = []
+            return response.Response(err, status.HTTP_200_OK)
+
+
+class AllOrdersView(APIView):
+    # authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        orders = Order.objects.all().order_by('-id')
+
+        if orders:
+            serializer = MerchantOrdersSerializer(orders, many=True)
+            return Response(serializer.data)
+        else:
+            # err = {"error": "not found", "status":404}
+            # return response.Response(err, status.HTTP_404_NOT_FOUND)
+            err = []
+            return response.Response(err, status.HTTP_200_OK)
+
+
+class OrderView(APIView):
+    # authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = OrderSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TransactionView(APIView):
+    # authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        transaction = Transaction.objects.all().order_by('-id')
+
+        if transaction:
+            serializer = TransactionSerializer(transaction, many=True)
+            return Response(serializer.data)
+        else:
+            # err = {"error": "not found", "status":404}
+            # return response.Response(err, status.HTTP_404_NOT_FOUND)
+            err = []
+            return response.Response(err, status.HTTP_200_OK)
+
+
+class OverviewView(APIView):
+    # authentication_classes = [TokenAuthentication]
+    # permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, id):
+        orders = Order.objects.filter(shop__user__user__id=id).count()
+        shops = Shop.objects.filter(user__user__id=id).count()
+        products = Product.objects.filter(shop__user__user__id=id).count()
+
+        return response.Response({"orders": orders, "shops": shops, "products": products}, status.HTTP_200_OK)

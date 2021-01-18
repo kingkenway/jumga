@@ -19,8 +19,8 @@ from jumga.permissions import IsOwnerOrReadOnly
 from jumga.access import encoded_reset_token, decode_reset_token
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
-from .serializers import UserTokenObtainPairSerializer, MerchantSignupSerializer, CustomerSignupSerializer, MerchantSerializer, CustomerSerializer, UserChangePasswordSerializer, CountrySerializer
-from .models import Merchant, Customer, Country
+from .serializers import UserTokenObtainPairSerializer, MerchantSignupSerializer, MerchantSerializer, UserChangePasswordSerializer, CountrySerializer, MerchantProfileSerializer
+from .models import Merchant, Country
 
 
 User = get_user_model()
@@ -77,54 +77,22 @@ class MerchantSignupView(APIView):
         return response.Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
-class CustomerSignupView(APIView):
-    # authentication_classes = [TokenAuthentication]
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        serializer = CustomerSignupSerializer(data=request.data)
-        if serializer.is_valid():
-            # serializer.data['email'])
-            user = serializer.save()
-
-            refresh = RefreshToken.for_user(user)
-            user_data = {}
-            user_data['id'] = user.id
-            user_data['email'] = user.email
-            user_data['customer_id'] = user.customer.id
-            user_data['first_name'] = user.customer.first_name
-            user_data['last_name'] = user.customer.last_name
-            user_data['phone_number'] = user.customer.phone_number
-
-            data = {
-                "status": 201,
-                "message": "user created",
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-                "profile": user_data
-            }
-
-            return response.Response(data, status.HTTP_201_CREATED)
-            # return response.Response({"status": 201, "message": "user created"}, status.HTTP_201_CREATED)
-        return response.Response(serializer.errors, status.HTTP_400_BAD_REQUEST)
-
-
 class MerchantProfileView(APIView):
     # authentication_classes = [TokenAuthentication]
     # permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
 
     def get_object(self, id):
         try:
-            user = Merchant.objects.get(user_id=id)
+            user = User.objects.get(id=id)
             self.check_object_permissions(self.request, user)
             return user
-        except Merchant.DoesNotExist:
+        except User.DoesNotExist:
             raise Http404
 
     def get(self, request, id):
         # token = request.headers.get('Authorization')
         user = self.get_object(id)
-        serializer = MerchantSerializer(user)
+        serializer = MerchantProfileSerializer(user)
         # data = serializer.data
         data = {
             "message": "ok",
@@ -135,7 +103,7 @@ class MerchantProfileView(APIView):
     def put(self, request, id,  format=None):
         profile = self.get_object(id)
 
-        serializer = MerchantSerializer(profile, data=request.data)
+        serializer = MerchantProfileSerializer(profile, data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

@@ -11,6 +11,7 @@ VER_ = 'v1'
 account = 'auth'
 merchant = 'merchant'
 customer = 'customer'
+admin = 'admin'
 
 urlpatterns = [
     # account
@@ -21,11 +22,6 @@ urlpatterns = [
 
     path(f'{VER_}/{account}/signup/{merchant}/',
          views.MerchantSignupView.as_view(), name='merchant_signup'),
-
-    path(f'{VER_}/{account}/signup/{customer}/',
-         views.CustomerSignupView.as_view(), name='customersignup'),
-
-
 
     path(f'{VER_}/{account}/logout/',
          views.LogoutView.as_view(), name='auth_logout'),
@@ -39,7 +35,8 @@ urlpatterns = [
     # /api/auth/password_reset/confirm/
     # /api/auth/password_reset/validate_token/
 
-    # path(f'{VER_}/{account}/profile/', views.ProfileUserView.as_view(), name='profile'),
+    path(f'{VER_}/{account}/profile/<uuid:id>',
+         views.MerchantProfileView.as_view(), name='profile'),
 
     # MERCHANT SHOPS
     path(f'{VER_}/{merchant}/profile/<uuid:id>/',
@@ -52,7 +49,7 @@ urlpatterns = [
          merchant_views.ShopDetailView.as_view(), name='merchant_shop_detail'),
 
     # *************
-    path(f'{VER_}/{merchant}/shop/<uuid:id>/all/',
+    path(f'{VER_}/{merchant}/shops/<uuid:id>/all/',
          merchant_views.ShopListView.as_view(), name='merchant_all_shops'),
 
 
@@ -75,8 +72,34 @@ urlpatterns = [
     path(f'{VER_}/{merchant}/shop/product/<int:id>/',
          merchant_views.ProductDetailView.as_view(), name='merchant_product_detail'),
 
-    path(f'{VER_}/{merchant}/shop/product/<int:shop_id>/all/',
+    path(f'{VER_}/{merchant}/shop/products/<int:shop_id>/all/',
          merchant_views.ProductListView.as_view(), name='merchant_all_shop_products'),
+
+    path(f'{VER_}/{merchant}/shop/products/<slug:shop_slug>/all/public/',
+         merchant_views.ShopAndProductsView.as_view(), name='all_shop_and_products_public'),
+
+    path(f'{VER_}/{merchant}/payment/',
+         merchant_views.PaymentView.as_view(), name='merchant_payment'),
+
+    path(f'{VER_}/{merchant}/order/',
+         merchant_views.OrderView.as_view(), name='merchant_order'),
+
+    path(f'{VER_}/{merchant}/allorders/<uuid:id>/',
+         merchant_views.MerchantOrdersView.as_view(), name='merchant_all_orders'),
+
+    path(f'{VER_}/{merchant}/overview/<uuid:id>/',
+         merchant_views.OverviewView.as_view(), name='overview'),
+
+
+    path(f'{VER_}/{customer}/orders/<str:email>/<str:contact>/',
+         merchant_views.CustomersOrderView.as_view(), name='customer_orders'),
+
+    # Admin
+    path(f'{VER_}/{admin}/transactions/',
+         merchant_views.TransactionView.as_view(), name='transactions'),
+
+    path(f'{VER_}/{admin}/allorders/',
+         merchant_views.AllOrdersView.as_view(), name='all_orders'),
 
     # OTHERS
     path(f'{VER_}/countries/',
