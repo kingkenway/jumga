@@ -323,7 +323,7 @@ class Transaction(models.Model):
 
 @receiver(post_save, sender=Payment)
 def initiate_transaction(sender, instance, **kwargs):
-    jumga_id = '2e66899b-0ca9-44da-941e-89c949cde8cc'
+    jumga_id = 'jumga@gmail.com'
 
     if kwargs['created']:
         if instance.payment_type == "approval":
@@ -332,7 +332,7 @@ def initiate_transaction(sender, instance, **kwargs):
                     # 1. Credit Jumga's account
                     # jumga_id = '2e66899b-0ca9-44da-941e-89c949cde8cc'
                     jumga = User.objects.get(
-                        id=jumga_id)
+                        email=jumga_id)
                     Transaction.objects.create(
                         beneficiary=jumga,
                         amount=instance.amount,
@@ -351,7 +351,7 @@ def initiate_transaction(sender, instance, **kwargs):
                     shop_obj.save()
 
                     # 3 Credit Account balance of Jumga shop
-                    user_obj = User.objects.get(id=jumga_id)
+                    user_obj = User.objects.get(email=jumga_id)
                     user_obj.account_balance += instance.amount
                     user_obj.save()
 
@@ -364,7 +364,7 @@ def initiate_transaction(sender, instance, **kwargs):
                     amount = (instance.amount - D(instance.shop.delivery_fee))
                     # 1. Credit Jumga's account on sale
                     Transaction.objects.create(
-                        beneficiary_id=jumga_id,
+                        beneficiary_email=jumga_id,
                         amount=amount * D(Order.JUMGA_PERCENTAGE),
                         currency=instance.currency,
                         tx_ref_from_payment=instance,
@@ -382,7 +382,7 @@ def initiate_transaction(sender, instance, **kwargs):
                     )
                     # 3. Credit Jumga's account on Delivery
                     Transaction.objects.create(
-                        beneficiary_id=jumga_id,
+                        beneficiary_email=jumga_id,
                         amount=instance.shop.delivery_fee *
                         D(Order.JUMGA_DELIVERY_PERCENTAGE),
                         currency=instance.currency,
