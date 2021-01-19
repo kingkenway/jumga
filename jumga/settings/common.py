@@ -117,8 +117,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': datetime.timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(minutes=120),
+    'ACCESS_TOKEN_LIFETIME': datetime.timedelta(minutes=120),
+    'REFRESH_TOKEN_LIFETIME': datetime.timedelta(minutes=240),
     # 'REFRESH_TOKEN_LIFETIME': datetime.timedelta(days=5),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'id',  # Random name to hold the uuid/id value on the frontend
